@@ -1,0 +1,22 @@
+---
+# tasks file for sta-cloudformation
+
+- name: launch ansible cloudformation for VPC 
+  cloudformation:
+    stack_name: "ansible-cloudformation-vpc"
+    state: "present"
+    region: "us-west-1"
+    disable_rollback: true
+    template: "{{ role_path }}/files/cft_VPC_EC2s_Basic.yml"
+    template_parameters:
+      AMI: "{{ ami }}"
+      EnvironmentName: "{{ environment | mandatory }}" 
+      InstanceCount: "{{ instance_count }}"
+      InstanceTypeParameter: "{{ instance_type_parameter }}"
+      KeyPair: "{{ key_pair }}"
+      PrivateSubnetCIDR: "{{ private_subnet_cidr | mandatory }}"
+      PublicSubnetCIDR: "{{ public_subnet_cidr | mandatory }}"
+      VpcCIDR: "{{ vpc_cidr | mandatory }}"
+    tags:
+      Stack: "ansible-cloudformation-vpc"
+    

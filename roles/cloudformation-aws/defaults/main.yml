@@ -1,0 +1,6 @@
+---
+# defaults file for cloudformation-aws
+ami: ami-0b606d7d59c68a5e0
+instance_count: 2
+instance_type_parameter: t2.nano
+key_pair: Key Pair Name

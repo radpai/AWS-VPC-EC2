@@ -1,0 +1,14 @@
+---
+-
+  hosts: localhost
+  connection: local
+  vars:
+    - environment: Environment for VPC
+    - public_subnet_cidr: 10.192.10.0/24
+    - private_subnet_cidr: 10.192.20.0/24
+    - vpc_cidr: 10.192.0.0/16
+  tasks:
+    -
+      name: Setup AWS VPC
+      import_role:
+        name: cloudformation-aws

@@ -1,0 +1,272 @@
+Description: >-
+  This template deploys a VPC, with a public and private subnet spread across an
+  Availability Zone. It deploys an internet gateway, with a default route on the
+  public subnet. It deploys a NAT gateway in the AZ, and default routes for it
+  in the private subnet. It also lets you deploy 1-5 EC2 instances within the
+  private subnet.
+Parameters:
+  EnvironmentName:
+    Description: An environment name that is prefixed to resource names
+    Type: String
+  VpcCIDR:
+    Description: Please enter the IP range (CIDR notation) for this VPC
+    Type: String
+    Default: 10.192.0.0/16
+  PublicSubnetCIDR:
+    Description: >-
+      Please enter the IP range (CIDR notation) for the public subnet in the
+      Availability Zone
+    Type: String
+    Default: 10.192.10.0/24
+  PrivateSubnetCIDR:
+    Description: >-
+      Please enter the IP range (CIDR notation) for the private subnet in the
+      Availability Zone
+    Type: String
+    Default: 10.192.20.0/24
+  InstanceTypeParameter:
+    Type: String
+    Default: t2.micro
+    AllowedValues:
+    - t2.micro
+    - t2.small
+    - t2.large
+    - t2.medium
+    Description: Enter t2.micro, t2.small, or t2.large. Default is t2.micro.
+  AMI:
+    Type: String
+    Default: ami-0b606d7d59c68a5e0
+    Description: Enter the Linux AMI to use.
+  KeyPair:
+    Type: String
+    Description: The key used to access the instance.
+  InstanceCount:
+    Description: Number of EC2 instances (must be between 1 and 5).
+    Type: Number
+    Default: 1
+    AllowedValues:
+    - 1
+    - 2
+    - 3
+    - 4
+    - 5
+
+Conditions:
+  Launch1: !Equals
+  - 1
+  - 1
+  Launch2: !Not
+  - !Equals
+    - 1
+    - !Ref InstanceCount
+  Launch3: !And
+  - !Not
+    - !Equals
+      - 1
+      - !Ref InstanceCount
+  - !Not
+    - !Equals
+      - 2
+      - !Ref InstanceCount
+  Launch4: !Or
+  - !Equals
+    - 4
+    - !Ref InstanceCount
+  - !Equals
+    - 5
+    - !Ref InstanceCount
+  Launch5: !Equals
+  - 5
+  - !Ref InstanceCount
+Resources:
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: !Ref VpcCIDR
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      Tags:
+      - Key: Name
+        Value: !Ref EnvironmentName
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+      - Key: Name
+        Value: !Ref EnvironmentName
+  InternetGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      InternetGatewayId: !Ref InternetGateway
+      VpcId: !Ref VPC
+  PublicSubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select
+      - 0
+      - !GetAZs ''
+      CidrBlock: !Ref PublicSubnetCIDR
+      MapPublicIpOnLaunch: true
+      Tags:
+      - Key: Name
+        Value: !Sub '${EnvironmentName} Public Subnet (AZ)'
+  PrivateSubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select
+      - 0
+      - !GetAZs ''
+      CidrBlock: !Ref PrivateSubnetCIDR
+      MapPublicIpOnLaunch: false
+      Tags:
+      - Key: Name
+        Value: !Sub '${EnvironmentName} Private Subnet (AZ)'
+  NatGatewayEIP:
+    Type: AWS::EC2::EIP
+    DependsOn: InternetGatewayAttachment
+    Properties:
+      Domain: vpc
+  NatGateway:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt
+      - NatGatewayEIP
+      - AllocationId
+      SubnetId: !Ref PublicSubnet
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+      - Key: Name
+        Value: !Sub '${EnvironmentName} Public Routes'
+  DefaultPublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: InternetGatewayAttachment
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+  PublicSubnetRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      SubnetId: !Ref PublicSubnet
+  PrivateRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+      - Key: Name
+        Value: !Sub '${EnvironmentName} Private Routes (AZ)'
+  DefaultPrivateRoute:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NatGateway
+  PrivateSubnetRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable
+      SubnetId: !Ref PrivateSubnet
+  InstanceSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: This security group provides SSH access.
+      GroupName: ssh
+      VpcId: !Ref VPC
+      Tags:
+      - Key: Name
+        Value: SSH Access
+      SecurityGroupIngress:
+      - IpProtocol: tcp
+        FromPort: 22
+        ToPort: 22
+        CidrIp: <enter-cidr-here>
+        Description: 'enter-description of the ingress rule here'
+      - IpProtocol: tcp
+        FromPort: 22
+        ToPort: 22
+        CidrIp: <enter-cidr-here>
+        Description: 'enter-description of the ingress rule here'
+  UbuntuServer1:
+    Condition: Launch1
+    Type: AWS::EC2::Instance
+    Properties:
+      SubnetId: !Ref PrivateSubnet
+      ImageId: !Ref AMI
+      InstanceType: !Ref InstanceTypeParameter
+      KeyName: !Ref KeyPair
+      SecurityGroupIds:
+      - !Ref InstanceSecurityGroup
+      Tags:
+      - Key: Name
+        Value: !Sub 'EC2 for ${EnvironmentName}'
+  UbuntuServer2:
+    Condition: Launch2
+    Type: AWS::EC2::Instance
+    Properties:
+      SubnetId: !Ref PrivateSubnet
+      ImageId: !Ref AMI
+      InstanceType: !Ref InstanceTypeParameter
+      KeyName: !Ref KeyPair
+      SecurityGroupIds:
+      - !Ref InstanceSecurityGroup
+      Tags:
+      - Key: Name
+        Value: !Sub 'EC2 for ${EnvironmentName}'
+  UbuntuServer3:
+    Condition: Launch3
+    Type: AWS::EC2::Instance
+    Properties:
+      SubnetId: !Ref PrivateSubnet
+      ImageId: !Ref AMI
+      InstanceType: !Ref InstanceTypeParameter
+      KeyName: !Ref KeyPair
+      SecurityGroupIds:
+      - !Ref InstanceSecurityGroup
+      Tags:
+      - Key: Name
+        Value: !Sub 'EC2 for ${EnvironmentName}'
+  UbuntuServer4:
+    Condition: Launch4
+    Type: AWS::EC2::Instance
+    Properties:
+      SubnetId: !Ref PrivateSubnet
+      ImageId: !Ref AMI
+      InstanceType: !Ref InstanceTypeParameter
+      KeyName: !Ref KeyPair
+      SecurityGroupIds:
+      - !Ref InstanceSecurityGroup
+      Tags:
+      - Key: Name
+        Value: !Sub 'EC2 for ${EnvironmentName}'
+  UbuntuServer5:
+    Condition: Launch5
+    Type: AWS::EC2::Instance
+    Properties:
+      SubnetId: !Ref PrivateSubnet
+      ImageId: !Ref AMI
+      InstanceType: !Ref InstanceTypeParameter
+      KeyName: !Ref KeyPair
+      SecurityGroupIds:
+      - !Ref InstanceSecurityGroup
+      Tags:
+      - Key: Name
+        Value: !Sub 'EC2 for ${EnvironmentName}'
+Outputs:
+  VPC:
+    Description: A reference to the created VPC
+    Value: !Ref VPC
+  PublicSubnet:
+    Description: A reference to the public subnet in the Availability Zone
+    Value: !Ref PublicSubnet
+  PrivateSubnet:
+    Description: A reference to the private subnet in the Availability Zone
+    Value: !Ref PrivateSubnet
+  InstanceSecurityGroup:
+    Description: This security group provides SSH access.
+    Value: !Ref InstanceSecurityGroup

@@ -1,0 +1,11 @@
+---
+###############################################################################
+# NOTE:
+#   ➤ Import playbooks.
+#   ➤ This helps keep the code modular.
+###############################################################################
+-
+  import_playbook: playbooks/setup_aws_vpc.yml
+  tags:
+    - setup
+    - setup_aws_vpc
